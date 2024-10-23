@@ -1,5 +1,7 @@
 # Proof-of-concept: parallel Stingray
 
+E. V. Lai, M. Bachetti
+
 We implemented a code able to parallelize some functions at the base of
 the "Averaged Cross Spectrum" and "Power Spectrum" classes. In
 particular, we ported in parallel the light curve's chunks data
@@ -30,12 +32,25 @@ operation). The final reduce operation is sequential, and requires all
 nodes to wait for their turn to transmit the data and for Node 0 to
 execute the sum.
 
+The code can be executed from the command line as 
+
+```
+python parallel_analysis_comparison_fullstingray_sim.py --method none
+```
+It takes ~45 seconds on our test laptop
+
 ## Second parallel implementation
 
 The second parallel implementation, implemented both with MPI and
 multiprocessing, improves the first passage: each node knows from the
 start, from the properties of the data and the input strategy, what data
 it will analyze. The final sum is still done by Node 0
+
+To execute this implementation with multiprocessing, use
+```
+python parallel_analysis_comparison_fullstingray_sim.py --method multiprocessing
+```
+It takes ~16 s on our test laptop
 
 ## Third parallel implementation
 The plot below represents the schematic idea behind a second parallel
@@ -46,6 +61,13 @@ process is really independent, the sum of all results takes *log~2~ n*
 steps instead of *n*. Mathematically/statistically no errors are
 introduced by the cascade of "averages" we implemented.
 ![Advanced parallel](binary_tree.png)
+
+To execute this implementation, use a slightly different command (needed to spawn the MPI processes)
+```
+mpiexec -n 10 python parallel_analysis_comparison_fullstingray_sim.py --method mpi
+```
+It takes ~13 s on our test laptop
+
 
 ## Results
 
