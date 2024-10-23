@@ -16,6 +16,15 @@ cut in equal time segments; 2) we calculate the FFT of each segment and
 take the square modulus (=the periodogram); 3) we average all these
 periodograms.
 
+In our example in this directory, data are simulated the first time the code is executed with a given set of parameters. We simulate an observation of length 12800, containing random photons with a count rate of 10 ct/s. For the Bartlett periodogram, we use 128-s segments, with a sampling time of $10^{-14}$\s (for a Nyquist frequency of 8192 Hz).
+
+The serial Stingray algorithm can be executed from the command line as 
+```
+python parallel_analysis_comparison_fullstingray_sim.py --method none
+```
+It takes ~45 seconds on our test laptop, a Macbook with 8 "performance" cores + 2 "efficiency" cores.
+
+
 ## First parallel implementation
 
 The first parallel version of this operation that we implemented is
@@ -31,13 +40,6 @@ divides by the number of segments (what we call the final reduce
 operation). The final reduce operation is sequential, and requires all
 nodes to wait for their turn to transmit the data and for Node 0 to
 execute the sum.
-
-The code can be executed from the command line as 
-
-```
-python parallel_analysis_comparison_fullstingray_sim.py --method none
-```
-It takes ~45 seconds on our test laptop
 
 ## Second parallel implementation
 
