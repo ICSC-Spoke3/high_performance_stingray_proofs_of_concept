@@ -6,7 +6,7 @@ We implemented a code able to parallelize some functions at the base of
 the "Averaged Cross Spectrum" and "Power Spectrum" classes. In
 particular, we ported in parallel the light curve's chunks data
 processing and averaging. The code we developed and tested is
-"parallel_try.py".
+"parallel_proof_of_concept.py".
 
 The code needed some propedeutic work, which was brought about in ICSC's fork 
 of Stingray and finally merged upstream: [PR 834 ](https://github.com/StingraySoftware/stingray/pull/834)
@@ -74,7 +74,7 @@ It takes ~13 s on our test laptop
 ## Results
 
 We tested the implementations on a example - event file, from the NuSTAR
-mission. The test led to a speed up from 50 s (serial) to 14 s with
+mission (see the folder M9_Lai for the test event file). The test led to a speed up from 50 s (serial) to 14 s with
 multi-processing (second parallel implementation) and 12s using MPI
 (third implemantation). No transparent calculation implemented at the
 moment. The number of chunks is chosen by the user.
