@@ -18,9 +18,11 @@ periodograms.
 
 In our example in this directory, data are simulated the first time the code is executed with a given set of parameters. We simulate an observation of length 12800, containing random photons with a count rate of 10 ct/s. For the Bartlett periodogram, we use 128-s segments, with a sampling time of $10^{-14}$\s (for a Nyquist frequency of 8192 Hz).
 
+## Serial version for comparison
+
 The serial Stingray algorithm can be executed from the command line as 
 ```
-python parallel_analysis_comparison_fullstingray_sim.py --method none
+python parallel_proof_of_concept.py --method none
 ```
 It takes ~45 seconds on our test laptop, a Macbook with 8 "performance" cores + 2 "efficiency" cores.
 
@@ -50,7 +52,7 @@ it will analyze. The final sum is still done by Node 0
 
 To execute this implementation with multiprocessing, use
 ```
-python parallel_analysis_comparison_fullstingray_sim.py --method multiprocessing
+python parallel_proof_of_concept.py --method multiprocessing
 ```
 It takes ~16 s on our test laptop
 
@@ -66,10 +68,14 @@ introduced by the cascade of "averages" we implemented.
 
 To execute this implementation, use a slightly different command (needed to spawn the MPI processes)
 ```
-mpiexec -n 10 python parallel_analysis_comparison_fullstingray_sim.py --method mpi
+mpiexec -n 10 python parallel_proof_of_concept.py --method mpi
 ```
 It takes ~13 s on our test laptop
 
+## Additional tests
+The code can be run with two additional options: ``--use-tsreader`` reads the data dynamically from 
+the FITS file instead of loading it all into memory; ``--cross`` calculates the cross spectrum 
+instead of the power spectrum, simulating two series of data instead of just one.
 
 ## Results
 
