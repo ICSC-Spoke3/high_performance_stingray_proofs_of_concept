@@ -12,6 +12,11 @@ from stingray.gti import time_intervals_from_gtis, cross_two_gtis
 from stingray.io import FITSTimeseriesReader
 from stingray.loggingconfig import logger
 from stingray.utils import histogram
+from uncertainties import ufloat
+
+import warnings
+
+warnings.filterwarnings("ignore", message=r".*n_ave is below 30. Please note.*")
 
 # rng = np.random.default_rng(12345)
 
@@ -23,11 +28,11 @@ def _sum_arrays(array_generator, operation_on_data):
     return total
 
 
-def get_data_intervals(interval_idxs, timeseries, info=None, sample_time=None):
+def get_data_intervals(time_intervals, timeseries, sample_time=None):
 
     if isinstance(timeseries, str):
         timeseries = FITSTimeseriesReader(timeseries, output_class=EventList)
-    time_intervals = info["interval_times"][interval_idxs]
+
     if np.shape(time_intervals) == (2,):
         time_intervals = [time_intervals]
 
@@ -40,21 +45,17 @@ def get_data_intervals(interval_idxs, timeseries, info=None, sample_time=None):
         yield lc
 
 
-def single_rank_intervals(
-    this_ranks_intervals, timeseries, sample_time=None, info=None
-):
+def single_rank_intervals(time_intervals, timeseries, sample_time=None):
+    segment_size = time_intervals[0, 1] - time_intervals[0, 0]
 
-    t_int = info["interval_times"][0]
-    nbin = int(np.rint((t_int[1] - t_int[0]) / sample_time))
+    nbin = int(segment_size / sample_time)
 
-    intv = info["interval_times"][0]
-    segment_size = intv[1] - intv[0]
     if isinstance(timeseries, tuple):
         lc_iterable_1 = get_data_intervals(
-            this_ranks_intervals, timeseries[0], info=info, sample_time=sample_time
+            time_intervals, timeseries[0], sample_time=sample_time
         )
         lc_iterable_2 = get_data_intervals(
-            this_ranks_intervals, timeseries[1], info=info, sample_time=sample_time
+            time_intervals, timeseries[1], sample_time=sample_time
         )
         pds = AveragedCrossspectrum.from_lc_iterable(
             lc_iterable_1,
@@ -66,7 +67,7 @@ def single_rank_intervals(
         )
     else:
         lc_iterable = get_data_intervals(
-            this_ranks_intervals, timeseries, info=info, sample_time=sample_time
+            time_intervals, timeseries, sample_time=sample_time
         )
         pds = AveragedPowerspectrum.from_lc_iterable(
             lc_iterable,
@@ -149,9 +150,11 @@ def main_mpi(events, sample_time, segment_size):
     intervals_per_rank = total_n_intervals / world_size
     all_intervals = np.arange(total_n_intervals, dtype=int)
 
-    this_ranks_intervals = all_intervals[
-        (all_intervals >= my_rank * intervals_per_rank)
-        & (all_intervals < (my_rank + 1) * intervals_per_rank)
+    this_ranks_intervals = info["interval_times"][
+        all_intervals[
+            (all_intervals >= my_rank * intervals_per_rank)
+            & (all_intervals < (my_rank + 1) * intervals_per_rank)
+        ]
     ]
     logger.debug(
         f"{my_rank}: Intervals {this_ranks_intervals[0] + 1} "
@@ -160,7 +163,7 @@ def main_mpi(events, sample_time, segment_size):
 
     # data = get_data_intervals(this_ranks_intervals)
     result, data_size = single_rank_intervals(
-        this_ranks_intervals, events, info=info, sample_time=sample_time
+        this_ranks_intervals, events, sample_time=sample_time
     )
 
     world_comm.Barrier()
@@ -260,9 +263,11 @@ def main_multiprocessing(events, sample_time, segment_size, world_size=8):
     this_ranks_intervals = []
     for my_rank in range(world_size):
         this_ranks_intervals.append(
-            all_intervals[
-                (all_intervals >= my_rank * intervals_per_rank)
-                & (all_intervals < (my_rank + 1) * intervals_per_rank)
+            info["interval_times"][
+                all_intervals[
+                    (all_intervals >= my_rank * intervals_per_rank)
+                    & (all_intervals < (my_rank + 1) * intervals_per_rank)
+                ]
             ]
         )
 
@@ -274,7 +279,6 @@ def main_multiprocessing(events, sample_time, segment_size, world_size=8):
         partial(
             single_rank_intervals,
             timeseries=events_to_pass,
-            info=info,
             sample_time=sample_time,
         ),
         this_ranks_intervals,
@@ -393,10 +397,8 @@ def main_with_args(args=None):
         fname = (fname, fname2)
 
     if args.use_tsreader:
-        print("Using TSReader")
         events = fname
     else:
-        print("Using EventList")
         if isinstance(fname, tuple):
             events = tuple([EventList.read(f) for f in fname])
         else:
@@ -406,6 +408,7 @@ def main_with_args(args=None):
     segment_size = args.segment_size
 
     t0 = time.time()
+
     if args.method == "mpi":
         # This method needs to be run with mpiexec -n <nproc> python script.py
         freq, power = main_mpi(events, sample_time, segment_size)
@@ -415,18 +418,41 @@ def main_with_args(args=None):
         )
     else:
         freq, power = main_none(events, sample_time, segment_size)
+
+    # This happens in MPI nodes that are done (all but rank 0), and we just exit
     if freq is None:
         return
 
-    print(np.mean(power), "±", np.std(power))
-    print("Elapsed time:", time.time() - t0)
-    plt.figure()
-    plt.plot(freq, power)
+    elapsed = time.time() - t0
+
+    print("------------------")
+    head = f"Results for method {args.method}"
+    if args.use_tsreader:
+        head += ", using TSReader"
     if args.cross:
-        plt.axhline(0)
+        head += " (cross spectrum)"
+    print(head)
+
+    if args.cross:
+        real = ufloat(np.mean(power.real), np.std(power.real))
+        imag = ufloat(np.mean(power.imag), np.std(power.imag))
+
+        print(f"Real: {real}; Imag: {imag}")
     else:
-        plt.axhline(2)
-    plt.show()
+        value = ufloat(np.mean(power), np.std(power))
+        print(f"Power: {value}")
+
+    elapsed = float(f"{elapsed:.1e}")
+    print(f"Elapsed time: {elapsed:g} s"),
+    print("------------------")
+
+    # plt.figure()
+    # plt.plot(freq, power)
+    # if args.cross:
+    #     plt.axhline(0)
+    # else:
+    #     plt.axhline(2)
+    # plt.show()
 
 
 if __name__ == "__main__":
